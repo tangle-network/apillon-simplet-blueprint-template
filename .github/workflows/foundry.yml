@@ -1,36 +1,56 @@
-name: Foundry CI
+name: CI
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [ 'main' ]
+    paths-ignore:
+      - "**.md"
 
 env:
   FOUNDRY_PROFILE: ci
 
 jobs:
-  foundry-check:
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-      fail-fast: true
-
-    name: Foundry project
+  verify-blueprint:
+    name: Verify Blueprint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      # Setup all toolchains
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
 
-      - name: Run Forge build
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # Install yarn dependencies first
+      - name: Install Yarn Dependencies
+        run: yarn install
+
+      # Now run Foundry checks
+      - name: Run Foundry Build
         run: |
           forge --version
           forge build --sizes
-        id: build
 
-      - name: Run Forge tests
+      - name: Run Foundry Tests
+        if: hashFiles('contracts/test/**/*.sol') != ''
         run: |
           forge test -vvv
-        id: test
+
+      - name: Check and Test Blueprint
+        run: |
+          cargo check
+          cargo build
+          cargo test
